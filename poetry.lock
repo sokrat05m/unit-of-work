@@ -283,6 +283,7 @@ files = [
 
 [package.dependencies]
 pytest = ">=8.2,<10"
+typing-extensions = {version = ">=4.12", markers = "python_version < \"3.13\""}
 
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
@@ -301,5 +302,5 @@ files = [
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.14"
-content-hash = "2a7fcefae6fe40032d9ea78d526498cef7c746509f1738dc210cdca4c77ed0e1"
+python-versions = ">=3.12"
+content-hash = "e044a9eee3e979bd57dcb911fba1a6e0b97a386e6c7333008add1bb036c4e77e"
