@@ -1,3 +1,6 @@
+import ast
+import inspect
+import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -33,6 +36,28 @@ class CollectionOfEmbedded:
 type ChildSpec = ListOf | SingleOf | SetOf | EmbeddedOf | CollectionOfEmbedded
 
 
+def _extract_init_attrs(cls: type) -> set[str]:
+    init = cls.__dict__.get("__init__")
+    if init is None or not inspect.isfunction(init):
+        return set()
+    try:
+        source = textwrap.dedent(inspect.getsource(init))
+    except OSError:
+        return set()
+    tree = ast.parse(source)
+    attrs: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Attribute)
+            and isinstance(node.targets[0].value, ast.Name)
+            and node.targets[0].value.id == "self"
+        ):
+            attrs.add(node.targets[0].attr)
+    return attrs
+
+
 @dataclass(frozen=True)
 class EntityConfig:
     entity_type: type
@@ -51,6 +76,7 @@ class EntityConfig:
             for cls in reversed(self.entity_type.__mro__):
                 if hasattr(cls, "__annotations__"):
                     all_attrs.update(cls.__annotations__.keys())
+                all_attrs.update(_extract_init_attrs(cls))
         return frozenset(all_attrs - self.exclude_from_tracking)
 
 

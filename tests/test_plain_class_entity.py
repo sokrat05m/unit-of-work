@@ -12,29 +12,51 @@ from uow import (
 
 
 class Account:
-    account_id: int | None
-    name: str
-
     def __init__(self, account_id: int | None, name: str) -> None:
         self.account_id = account_id
         self.name = name
 
 
 class BaseEntity:
-    entity_id: int | None
-
     def __init__(self, entity_id: int | None) -> None:
         self.entity_id = entity_id
 
 
 class Employee(BaseEntity):
-    department: str
-
     def __init__(
         self, entity_id: int | None, department: str
     ) -> None:
         super().__init__(entity_id)
         self.department = department
+
+
+class Color:
+    def __init__(self, color_id: int | None, name: str) -> None:
+        self._color_id = color_id
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def change_name(self, name: str) -> None:
+        self._name = name
+
+
+class FakeColorMapper(GenericDataMapper[Color]):
+    def __init__(self, connection: object) -> None:
+        self.saved: list[Color] = []
+        self.updated: list[Color] = []
+        self.deleted: list[Color] = []
+
+    async def save(self, entities: Iterable[Color]) -> None:
+        self.saved.extend(entities)
+
+    async def update(self, entities: Iterable[Color]) -> None:
+        self.updated.extend(entities)
+
+    async def delete(self, entities: Iterable[Color]) -> None:
+        self.deleted.extend(entities)
 
 
 class FakeAccountMapper(GenericDataMapper[Account]):
@@ -93,6 +115,82 @@ def employee_uow() -> UnitOfWork:
         )
     )
     return UnitOfWork(AsyncMock(), reg)
+
+
+@pytest.fixture
+def color_uow() -> UnitOfWork:
+    reg = InstrumentationRegistry()
+    reg.register(
+        EntityConfig(
+            entity_type=Color,
+            identity_key=("_color_id",),
+            mapper_type=FakeColorMapper,
+        )
+    )
+    return UnitOfWork(AsyncMock(), reg)
+
+
+class TestPrivateAttrTracking:
+    def test_no_changes_no_update(self, color_uow: UnitOfWork) -> None:
+        color = Color(color_id=1, name="Red")
+        color_uow.register_clean(color)
+
+        ops = color_uow._build_operations()
+        assert ops == []
+
+    def test_private_attr_change_via_method_produces_update(
+        self, color_uow: UnitOfWork
+    ) -> None:
+        color = Color(color_id=1, name="Red")
+        color_uow.register_clean(color)
+
+        color.change_name("Blue")
+
+        ops = color_uow._build_operations()
+        assert len(ops) == 1
+        op_type, entity_type, entities = ops[0]
+        assert op_type.value == "update"
+        assert entity_type is Color
+        assert entities == [color]
+
+    def test_private_attr_direct_change_produces_update(
+        self, color_uow: UnitOfWork
+    ) -> None:
+        color = Color(color_id=1, name="Red")
+        color_uow.register_clean(color)
+
+        color._name = "Blue"
+
+        ops = color_uow._build_operations()
+        assert len(ops) == 1
+        assert ops[0][0].value == "update"
+
+    @pytest.mark.asyncio
+    async def test_commit_calls_mapper(
+        self, color_uow: UnitOfWork
+    ) -> None:
+        color = Color(color_id=1, name="Red")
+        color_uow.register_clean(color)
+        color.change_name("Blue")
+
+        await color_uow.commit()
+
+        mapper = color_uow._mappers[Color]
+        assert isinstance(mapper, FakeColorMapper)
+        assert color in mapper.updated
+
+    @pytest.mark.asyncio
+    async def test_commit_cleans_state(
+        self, color_uow: UnitOfWork
+    ) -> None:
+        color = Color(color_id=1, name="Red")
+        color_uow.register_clean(color)
+        color.change_name("Blue")
+
+        await color_uow.commit()
+
+        ops = color_uow._build_operations()
+        assert ops == []
 
 
 class TestPlainClassEntity:
