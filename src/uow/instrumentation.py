@@ -11,6 +11,7 @@ from uow.mapper import GenericDataMapper
 @dataclass(frozen=True)
 class ListOf:
     entity_type: type
+    parent_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class SingleOf:
 @dataclass(frozen=True)
 class SetOf:
     entity_type: type
+    parent_key: str | None = None
 
 
 @dataclass(frozen=True)

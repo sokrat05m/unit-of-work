@@ -20,7 +20,7 @@ class TestChangeTracker:
 
         item.product = "B"
         assert tracker.is_dirty
-        assert tracker.get_dirty_fields() == frozenset({"product"})
+        assert tracker.get_dirty_fields() == frozenset({"product"})  # type: ignore[unreachable]
 
     def test_multiple_fields_dirty(self) -> None:
         item = Item(id=1, product="A", qty=5)

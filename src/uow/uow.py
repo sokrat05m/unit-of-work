@@ -229,7 +229,7 @@ class UnitOfWork:
             ):
                 tracked_list = TrackedList(
                     child_value,
-                    on_add=lambda item: self._on_child_added(item),
+                    on_add=lambda item, p=entity, cs=child_spec, cfg=config: self._on_child_added(item, p, cs, cfg),  # type: ignore[misc]
                     on_remove=lambda item: self._on_child_removed(item),
                 )
                 object.__setattr__(entity, attr_name, tracked_list)
@@ -239,7 +239,7 @@ class UnitOfWork:
             ):
                 tracked_set = TrackedSet(
                     child_value,
-                    on_add=lambda item: self._on_child_added(item),
+                    on_add=lambda item, p=entity, cs=child_spec, cfg=config: self._on_child_added(item, p, cs, cfg),  # type: ignore[misc]
                     on_remove=lambda item: self._on_child_removed(item),
                 )
                 object.__setattr__(entity, attr_name, tracked_set)
@@ -255,7 +255,7 @@ class UnitOfWork:
             ):
                 tracked_list = TrackedList(
                     child_value,
-                    on_add=lambda item: self._on_child_added(item),
+                    on_add=lambda item, p=entity, cs=child_spec, cfg=config: self._on_child_added(item, p, cs, cfg),  # type: ignore[misc]
                     on_remove=lambda item: self._on_child_removed(item),
                     on_materialize=lambda e=entity, a=attr_name: self._register_collection_children_clean(e, a),  # type: ignore[misc]
                 )
@@ -266,7 +266,7 @@ class UnitOfWork:
             ):
                 tracked_set = TrackedSet(
                     child_value,
-                    on_add=lambda item: self._on_child_added(item),
+                    on_add=lambda item, p=entity, cs=child_spec, cfg=config: self._on_child_added(item, p, cs, cfg),  # type: ignore[misc]
                     on_remove=lambda item: self._on_child_removed(item),
                     on_materialize=lambda e=entity, a=attr_name: self._register_collection_children_clean(e, a),  # type: ignore[misc]
                 )
@@ -295,7 +295,26 @@ class UnitOfWork:
                 self._make_dirty_callback(entity, attr_name),
             )
 
-    def _on_child_added(self, item: object) -> None:
+    @staticmethod
+    def _set_parent_key(
+        parent: object,
+        child: object,
+        child_spec: ListOf | SetOf,
+        parent_config: EntityConfig,
+    ) -> None:
+        if child_spec.parent_key is None:
+            return
+        parent_id = getattr(parent, parent_config.identity_key[0])
+        object.__setattr__(child, child_spec.parent_key, parent_id)
+
+    def _on_child_added(
+        self,
+        item: object,
+        parent: object,
+        child_spec: ListOf | SetOf,
+        parent_config: EntityConfig,
+    ) -> None:
+        self._set_parent_key(parent, item, child_spec, parent_config)
         if id(item) not in self._entries:
             self.register_new(item)
 
@@ -316,6 +335,7 @@ class UnitOfWork:
                 self.register_new(child_value)
             elif isinstance(child_spec, (ListOf, SetOf)):
                 for child in child_value:
+                    self._set_parent_key(entity, child, child_spec, config)
                     self.register_new(child)
 
     def _register_single_children_clean(
